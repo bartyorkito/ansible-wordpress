@@ -6,7 +6,7 @@
         name: "{{ item }}"
         state: latest
       become: yes
-      with_items:
+      with_items: # substituir with_items: por loop:
         - php
         - apache2
         - libapache2-mod-php
