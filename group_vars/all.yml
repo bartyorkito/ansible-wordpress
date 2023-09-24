@@ -1,0 +1,12 @@
+---
+wp_user_name: "wordpress_user"
+wp_db_name: "wordpress_db"
+wp_installation_dir: "/var/www/"
+wp_password: "12345"
+#wp_db_ip: "192.168.56.42"
+#wp_host_ip: "192.168.56.40"
+wp_download_url: "https://wordpress.org/latest.tar.gz"        
+wp_download_dir: "/tmp/wordpress.tar.gz"
+
+##apache_config_dir: "/etc/apache2/sites-available/"
+

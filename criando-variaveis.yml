@@ -1,0 +1,148 @@
+---
+- hosts: database
+
+  handlers:
+    - name: "RESTART-MYSQL"
+      service:
+        name: 'mysql'
+        state: 'restarted'
+      become: yes
+
+  tasks:
+    - name: 'INSTALA PACOTES DE BANCO DE DADOS MYSQL DEPENDENCIA OPERACIONAL'
+      apt:
+        name: "{{ item }}"
+        state: latest
+      become: yes
+      with_items:
+        - python3-pymysql
+        - mysql-server
+
+    - name: "CRIANDO O BANCO MYSQL"
+      mysql_db:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: "{{ wp_db_name }}"     #wordpress_db
+        state: present
+      become: yes
+
+    - name: "CRIANDO O USUSARIO, SENHA E ATRIBUINDO PRIVILEGIOS NA LISTA DE HOSTS"
+      mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        #login_user: root
+        name: "{{ wp_user_name }}"
+        password: "{{ wp_password }}"
+        priv: "{{ wp_db_name }}.*:ALL"
+        state: present    
+        host: "{{ item }}" # host permitido para esse usuario
+      loop:
+        - '127.0.0.1' 
+        - 'localhost'
+        - "{{ wp_host_ip }}"
+      become: yes
+
+    - name: "COPIANDO O ARQUIVO MY.CNF DO PROJETO PARA O HOST DE BANCO DESTINO"
+      copy:
+        src: 'files/my.cnf'
+        dest: '/etc/mysql/mysql.conf.d/mysqld.cnf'
+        remote_src: no
+      become: true
+      notify:
+        - RESTART-MYSQL
+
+    - name: "RESTART MYSQL WITHOUT HANDLERS"
+      service:
+        name: 'mysql'
+        state: "restarted"
+      become: true
+
+
+
+
+- hosts: wordpress
+
+  handlers:
+    - name: "RESTART APACHE"
+      service:
+        name: 'apache2'
+        state: 'restarted'      
+      become: yes
+
+  tasks:
+    - name: 'INSTALA PACORES DO APACHE E DO PHP DE DEPENDENCIA OPERACIONAL'
+      apt:
+        name: "{{ item }}"
+        state: latest
+      become: yes
+      loop:
+        - php
+        - apache2
+        - libapache2-mod-php
+        - php-mysql
+        - php-curl
+        #- php-gd
+        - php-xml
+        - php-mbstring
+        - php-xmlrpc
+        - php-zip
+        - php-soap
+        - php-intl
+        #- python3-pymysql
+        #- php5-mcrypt
+        #- mysql-server
+
+    - name: " BAIXA O ARQUIVO DE INSTALAÇÃO DO WORDPRESS "
+      ansible.builtin.get_url:
+        url: "{{ wp_download_url }}"
+        dest: "{{ wp_download_dir }}"
+
+    - name: "DESCOMPACTANDO O ARQUIVO"        
+      unarchive:
+        src: "{{ wp_download_dir }}"
+        dest: "{{ wp_installation_dir }}"
+        remote_src: yes # se caso o arquivo descompactado estiver na máquina target ( ou seja a máquina que o ansible está aplicando as mudanças)
+      become: yes
+
+
+    - name: "COPIANDO O ARQUIVO DE UMA LOCALIZAÇÃO"
+      copy:
+        src: '/var/www/wordpress/wp-config-sample.php'
+        dest: '/var/www/wordpress/wp-config.php'
+        remote_src: yes
+      become: yes
+      
+    - name: "CONFIGURANDO O ARQUIVO DE CONFIGURAÇÃO DO WORDPRESS COM O MODULO REPLACE"
+      replace:
+        path: '/var/www/wordpress/wp-config.php'
+        regexp: "{{ item.regex }}"
+        replace: "{{ item.value }}"
+        #backup: yes
+      loop:
+        - {regex: 'database_name_here', value: "{{ wp_db_name }}"}
+        - {regex: 'username_here', value: "{{ wp_user_name }}"}
+        - {regex: 'password_here', value: "{{ wp_password }}"}
+        - {regex: 'localhost', value: "{{ wp_db_ip }}"}
+      become: yes
+
+    - name: "CONFIGURA APACHE PARA SERVIR O WORDPRESS"
+      template: # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  PERCEBA QUE AQUI ESTAMOS USANDO O MODULO TEMPLATE E NÃO O COPY COMO ANTERIORMENTE
+        src: 'templates/000-default.conf.j2'
+        dest: '/etc/apache2/sites-available/000-default.conf'
+      # como o arquivo não está na máquina alvo, está na nossa máquina de controle, não vamos usar o remote_src
+      become: yes
+      notify:
+        - RESTART APACHE
+
+    - name: "RESTARTING APACHE WITHOUT HANDLERS"
+      service:
+        name: "apache2"
+        state: "restarted"
+      become: true
+
+        
+
+
+
+    
+
+
+    
